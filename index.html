@@ -4,24 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Сладкие Танчики</title>
-<!-- Подключение SDK Пикабу (адрес может быть уточнен в актуальной доке студии, обычно такой) -->
 <script src="https://games.pikabu.ru/sdk/pikabu-sdk.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;overflow:hidden}
 body{font-family:'Comic Sans MS','Chalkboard SE','Segoe Print',sans-serif;background:#0d2b33;color:#fff;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
-
-/* ИГРА СКРЫТА ДО ready() */
 #app{display:none}
 #app.ready{display:block}
-
-/* SPLASH */
 #splash{position:fixed;inset:0;background:radial-gradient(ellipse at center,#1a4a5a,#0d2b33);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;font-size:24px;color:#fff;font-weight:bold;text-shadow:0 2px 6px rgba(0,0,0,.5);gap:20px;transition:opacity .4s;cursor:pointer}
 #splash.hide{opacity:0;pointer-events:none}
 #splash .tank-anim{font-size:80px;animation:tankBounce 1s infinite}
 @keyframes tankBounce{0%,100%{transform:translateY(0) rotate(-5deg)}50%{transform:translateY(-20px) rotate(5deg)}}
 #splash .hint{font-size:14px;opacity:.7;margin-top:10px}
-
 #game-wrap{position:fixed;inset:0;z-index:0;overflow:hidden}
 canvas#game{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);touch-action:none;cursor:crosshair}
 #ui-top{position:fixed;top:10px;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:0 14px;gap:10px;z-index:5;pointer-events:none}
@@ -75,14 +69,12 @@ canvas#game{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);to
 </head>
 <body>
 
-<!-- SPLASH -->
 <div id="splash">
   <div class="tank-anim">🍓</div>
   <div id="splash-text">Загрузка...</div>
   <div class="hint" id="splash-hint">Нажмите, чтобы продолжить</div>
 </div>
 
-<!-- ИГРА (скрыта до ready) -->
 <div id="app">
 <div id="game-wrap"><canvas id="game" width="1280" height="720"></canvas></div>
 <div id="ui-top">
@@ -150,9 +142,38 @@ document.addEventListener('contextmenu',e=>e.preventDefault());
 document.addEventListener('selectstart',e=>e.preventDefault());
 document.addEventListener('dragstart',e=>e.preventDefault());
 
+/* ========== УЛУЧШЕННОЕ УПРАВЛЕНИЕ КЛАВИАТУРОЙ ========== */
+const keys = {};
+window.addEventListener('keydown', e => {
+    keys[e.code] = true;
+    // Блокируем скролл и стандартные действия браузера для игровых клавиш
+    if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyW','KeyA','KeyS','KeyD'].includes(e.code)) {
+        e.preventDefault();
+    }
+    // Мгновенные действия
+    if (e.code === 'Escape') { 
+        state==='pause' ? resumeFromPause() : openPause(); 
+    }
+    if (e.code === 'Space' && state==='aim' && turn==='p') {
+        document.getElementById('fire-btn').click();
+    }
+    // Смена оружия цифрами 1-7
+    if (e.code >= 'Digit1' && e.code <= 'Digit7') {
+        const idx = parseInt(e.code.replace('Digit','')) - 1;
+        if (ammo[idx] > 0) { 
+            curWeapon = idx; 
+            updateHUD(); 
+            sound.tone(700,.05,'square',.15); 
+        }
+    }
+});
+window.addEventListener('keyup', e => {
+    keys[e.code] = false;
+});
+
 /* ========== ПЕРЕВОДЫ ========== */
 const I18N={
-ru:{title:'Сладкие Танчики',menu:'6 карт, 18 уровней, боссы и 7 снарядов! Тяни по экрану для прицела, двигайся ◀ ▶ и учитывай ветер! 🎯 — автоприцел (3 за бой).',
+ru:{title:'Сладкие Танчики',menu:'6 карт, 18 уровней, боссы и 7 снарядов! Тяни по экрану, используй клавиши A/D для движения, стрелки для прицела и Пробел для выстрела!',
 campaign:'🎯 Кампания',endless:'♾️ Эндлесс',maps:'🗺️ Карта',mapsTitle:'🗺️ Выбор карты',auto:'Авто',
 levelsTitle:'🗺️ Выбор уровня',back:'⬅️ Назад',
 yourMove:'🍓 Твой ход!',enemyMove:'🫐 Ход противника...',win:'🏆 ПОБЕДА!',lose:'💔 Поражение',
@@ -164,7 +185,7 @@ loading:'Загрузка...',tapHint:'Нажмите, чтобы продолж
 adNo:'😕 Реклама недоступна',
 revive:'📺 Воскреснуть за рекламу',reviveTitle:'📺 Воскреснуть?',
 reviveDesc:'Посмотри рекламу и продолжи бой с 50% HP'},
-en:{title:'Sweet Tanks',menu:'6 maps, 18 levels, bosses and 7 shells! Drag to aim, move ◀ ▶ and mind the wind! 🎯 — auto-aim (3 per battle).',
+en:{title:'Sweet Tanks',menu:'6 maps, 18 levels, bosses and 7 shells! Drag to aim, use A/D to move, Arrows to aim and Space to fire!',
 campaign:'🎯 Campaign',endless:'♾️ Endless',maps:'🗺️ Map',mapsTitle:'🗺️ Select map',auto:'Auto',
 levelsTitle:'🗺️ Select level',back:'⬅️ Back',
 yourMove:'🍓 Your turn!',enemyMove:'🫐 Enemy turn...',win:'🏆 VICTORY!',lose:'💔 Defeat',
@@ -237,26 +258,25 @@ document.getElementById('splash').addEventListener('pointerdown',()=>{
 });
 
 function gameplayStart(){
-  if(gameplayStarted || !pikabuSDK) return;
+  if(gameplayStarted || !window.pikabuSDK) return;
   try{
-    if(pikabuSDK.features && pikabuSDK.features.GameplayAPI){
-      pikabuSDK.features.GameplayAPI.start();
+    if(window.pikabuSDK.features && window.pikabuSDK.features.GameplayAPI){
+      window.pikabuSDK.features.GameplayAPI.start();
       gameplayStarted=true;
     }
   }catch(e){}
 }
 function gameplayStop(){
-  if(!gameplayStarted || !pikabuSDK) return;
+  if(!gameplayStarted || !window.pikabuSDK) return;
   try{
-    if(pikabuSDK.features && pikabuSDK.features.GameplayAPI){
-      pikabuSDK.features.GameplayAPI.stop();
+    if(window.pikabuSDK.features && window.pikabuSDK.features.GameplayAPI){
+      window.pikabuSDK.features.GameplayAPI.stop();
       gameplayStarted=false;
     }
   }catch(e){}
 }
 
 function initPikabuSDK(){
-  // Локальный режим или если SDK еще не загрузился
   if(typeof window.pikabuSDK === 'undefined'){
     console.warn('Pikabu SDK not found. Running in local fallback mode.');
     applyLang();
@@ -264,8 +284,6 @@ function initPikabuSDK(){
     showGame();
     return;
   }
-  
-  // Таймаут: если SDK завис — показываем игру через 5 сек (требование надежности)
   sdkTimeout=setTimeout(()=>{
     console.warn('SDK timeout, forcing show');
     if(!gameReady){applyLang();updateHUD();showGame();}
@@ -273,27 +291,19 @@ function initPikabuSDK(){
   
   window.pikabuSDK.init().then(sdk=>{
     pikabuSDK=sdk;
-    
-    // 1. Язык от SDK
     try{
       if(pikabuSDK.environment && pikabuSDK.environment.lang){
         const sdkLang=pikabuSDK.environment.lang;
         if(sdkLang==='ru'||sdkLang==='en') LANG=sdkLang;
       }
     }catch(e){}
-    
-    // 2. Применяем язык (игра всё ещё display:none)
     applyLang();
     updateHUD();
-    
-    // 3. Сообщаем платформе, что загрузка завершена
     try{
       if(pikabuSDK.features && pikabuSDK.features.LoadingAPI){
         pikabuSDK.features.LoadingAPI.ready();
       }
     }catch(e){}
-    
-    // 4. Показываем игру и загружаем сохранения
     requestAnimationFrame(()=>{
       showGame();
       loadCloud();
@@ -307,21 +317,21 @@ function initPikabuSDK(){
 }
 
 function showInterstitial(){
-  if(!pikabuSDK)return;
+  if(!window.pikabuSDK)return;
   const n=Date.now();
-  if(n-lastInter<180000)return; // не чаще 3 минут
+  if(n-lastInter<180000)return;
   lastInter=n;
   gameplayStop();
-  if(pikabuSDK.adv && pikabuSDK.adv.showFullscreen){
-    pikabuSDK.adv.showFullscreen({callbacks:{onClose:()=>{},onError:()=>{}}});
+  if(window.pikabuSDK.adv && window.pikabuSDK.adv.showFullscreen){
+    window.pikabuSDK.adv.showFullscreen({callbacks:{onClose:()=>{},onError:()=>{}}});
   }
 }
 
 function watchAd(cb){
-  if(!pikabuSDK){cb();return;}
+  if(!window.pikabuSDK){cb();return;}
   gameplayStop();
-  if(pikabuSDK.adv && pikabuSDK.adv.showRewarded){
-    pikabuSDK.adv.showRewarded({
+  if(window.pikabuSDK.adv && window.pikabuSDK.adv.showRewarded){
+    window.pikabuSDK.adv.showRewarded({
       callbacks:{
         onRewarded: cb,
         onClose: ()=>{},
@@ -329,7 +339,7 @@ function watchAd(cb){
       }
     });
   } else {
-    cb(); // Fallback если реклама недоступна
+    cb();
   }
 }
 
@@ -344,8 +354,8 @@ function saveCloud(){
 }
 
 function loadCloud(){
-  if(!pikabuSDK)return;
-  pikabuSDK.getPlayer().then(p=>{
+  if(!window.pikabuSDK)return;
+  window.pikabuSDK.getPlayer().then(p=>{
     pPlayer=p;
     return p.getData(['level','wins','best','stars']);
   }).then(d=>{
@@ -356,7 +366,6 @@ function loadCloud(){
           if((d.stars[k]||0) > (stars[k]||0)) stars[k]=d.stars[k];
         }
       }
-      // Синхронизируем с localStorage для надежности
       localStorage.setItem('sb_best', bestScore);
       localStorage.setItem('sb_stars', JSON.stringify(stars));
     }
@@ -364,12 +373,10 @@ function loadCloud(){
 }
 
 function submitScore(){
-  if(!pikabuSDK) return;
-  // Если в Пикабу есть лидерборды, раскомментировать и адаптировать под их названия
-  // pikabuSDK.getLeaderboards().then(lb=>lb.setLeaderboardScore('candyBattleScore',bestScore)).catch(()=>{});
+  if(!window.pikabuSDK) return;
 }
 
-/* ========== ЗВУКИ (НАДЁЖНАЯ РАЗБЛОКИРОВКА) ========== */
+/* ========== ЗВУКИ ========== */
 class SoundManager{
   constructor(){this.ctx=null;this.enabled=localStorage.getItem('sb_sound')!=='false';this.i=false;this.queue=[];}
   init(){if(this.i)return;try{const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;this.ctx=new AC();this.i=true;this.ctx.resume().catch(()=>{});}catch(e){}}
@@ -410,31 +417,18 @@ class SoundManager{
 const sound=new SoundManager();
 ['pointerdown','touchstart','click','keydown'].forEach(ev=>document.addEventListener(ev,()=>sound.unlock(),{capture:true}));
 
-/* ========== КАРТЫ ========== */
+/* ========== КАРТЫ И ПЕРЕМЕННЫЕ ========== */
 const MAPS=[
-{id:'forest',emoji:'🌲',ru:'Лес',en:'Forest',
- sky:['#0a2e3a','#124a4a','#1a6054','#22746a'],hillFar:'#154842',hillNear:'#1c5c52',
- ground:['#9c85b8','#8570a2','#6a5688'],edge:'#c9aedf',spot:'rgba(40,25,60,.18)'},
-{id:'desert',emoji:'🏜️',ru:'Пустыня',en:'Desert',
- sky:['#2e1a0a','#7a3c14','#c96a1e','#e8a13c'],hillFar:'#a05a20',hillNear:'#c07a2a',
- ground:['#e8c07a','#d4a856','#b88c3e'],edge:'#f7e3b0',spot:'rgba(120,80,20,.18)'},
-{id:'snow',emoji:'❄️',ru:'Снега',en:'Snow',
- sky:['#0a1a3a','#1a3a6a','#2a5a9a','#4a7ac0'],hillFar:'#b8d0e8',hillNear:'#dceaf5',
- ground:['#f0f8ff','#dceaf5','#c0d4e8'],edge:'#ffffff',spot:'rgba(100,130,180,.18)'},
-{id:'volcano',emoji:'🌋',ru:'Вулкан',en:'Volcano',
- sky:['#1a0505','#3a0a0a','#5a1408','#7a2408'],hillFar:'#3a1008',hillNear:'#521a0c',
- ground:['#4a3a3a','#3a2c2c','#2c2020'],edge:'#ff6a2a',spot:'rgba(255,106,42,.15)'},
-{id:'space',emoji:'🌙',ru:'Луна',en:'Moon',
- sky:['#050510','#0a0a20','#101030','#181840'],hillFar:'#202038',hillNear:'#2a2a48',
- ground:['#b0b0c0','#9898a8','#808090'],edge:'#e0e0f0',spot:'rgba(60,60,90,.25)'},
-{id:'candy',emoji:'🍭',ru:'Конфетия',en:'Candy',
- sky:['#3a1a4a','#6a2a6a','#a03a7a','#d05a8a'],hillFar:'#8a3a7a',hillNear:'#b04a8a',
- ground:['#ff9ed6','#f07ab8','#d856a0'],edge:'#ffd6ec',spot:'rgba(200,50,120,.18)'}
+{id:'forest',emoji:'🌲',ru:'Лес',en:'Forest',sky:['#0a2e3a','#124a4a','#1a6054','#22746a'],hillFar:'#154842',hillNear:'#1c5c52',ground:['#9c85b8','#8570a2','#6a5688'],edge:'#c9aedf',spot:'rgba(40,25,60,.18)'},
+{id:'desert',emoji:'🏜️',ru:'Пустыня',en:'Desert',sky:['#2e1a0a','#7a3c14','#c96a1e','#e8a13c'],hillFar:'#a05a20',hillNear:'#c07a2a',ground:['#e8c07a','#d4a856','#b88c3e'],edge:'#f7e3b0',spot:'rgba(120,80,20,.18)'},
+{id:'snow',emoji:'❄️',ru:'Снега',en:'Snow',sky:['#0a1a3a','#1a3a6a','#2a5a9a','#4a7ac0'],hillFar:'#b8d0e8',hillNear:'#dceaf5',ground:['#f0f8ff','#dceaf5','#c0d4e8'],edge:'#ffffff',spot:'rgba(100,130,180,.18)'},
+{id:'volcano',emoji:'🌋',ru:'Вулкан',en:'Volcano',sky:['#1a0505','#3a0a0a','#5a1408','#7a2408'],hillFar:'#3a1008',hillNear:'#521a0c',ground:['#4a3a3a','#3a2c2c','#2c2020'],edge:'#ff6a2a',spot:'rgba(255,106,42,.15)'},
+{id:'space',emoji:'🌙',ru:'Луна',en:'Moon',sky:['#050510','#0a0a20','#101030','#181840'],hillFar:'#202038',hillNear:'#2a2a48',ground:['#b0b0c0','#9898a8','#808090'],edge:'#e0e0f0',spot:'rgba(60,60,90,.25)'},
+{id:'candy',emoji:'🍭',ru:'Конфетия',en:'Candy',sky:['#3a1a4a','#6a2a6a','#a03a7a','#d05a8a'],hillFar:'#8a3a7a',hillNear:'#b04a8a',ground:['#ff9ed6','#f07ab8','#d856a0'],edge:'#ffd6ec',spot:'rgba(200,50,120,.18)'}
 ];
 const TOTAL_LEVELS=18;
 let chosenMap=-1,mapFromPause=false;
 
-/* ========== ИГРА ========== */
 const cvs=document.getElementById('game'),ctx=cvs.getContext('2d');
 const LW=1280,LH=720;
 const GRAV=500;
@@ -595,7 +589,7 @@ document.getElementById('pm-sound').onclick=()=>{
 };
 document.getElementById('pm-menu').onclick=()=>{state='menu';show('menu');};
 
-/* ========== АВТОПРИЦЕЛ 🎯 ========== */
+/* ========== АВТОПРИЦЕЛ ========== */
 document.getElementById('aim-btn').onclick=()=>{
   if(state!=='aim'||turn!=='p'||aimAssist<=0)return;
   sound.unlock();
@@ -614,7 +608,7 @@ document.getElementById('aim-btn').onclick=()=>{
   updateHUD();
 };
 
-/* ========== ПРИЦЕЛ ========== */
+/* ========== ПРИЦЕЛ МЫШЬЮ ========== */
 function canvasPos(e){
   const r=cvs.getBoundingClientRect();
   return {x:(e.clientX-r.left)/r.width*LW,y:(e.clientY-r.top)/r.height*LH};
@@ -632,15 +626,6 @@ function setAim(e){
   aimPower=Math.max(20,Math.min(100,Math.round(Math.hypot(dx,dy)/3.8)));
   updateHUD();
 }
-document.addEventListener('keydown',e=>{
-  if(e.code==='Escape'){state==='pause'?resumeFromPause():openPause();return;}
-  if(state!=='aim'||turn!=='p')return;
-  if(e.code==='ArrowRight')aimAngle=Math.min(175,aimAngle+2);
-  if(e.code==='ArrowLeft')aimAngle=Math.max(5,aimAngle-2);
-  if(e.code==='ArrowUp')aimPower=Math.min(100,aimPower+2);
-  if(e.code==='ArrowDown')aimPower=Math.max(20,aimPower-2);
-  updateHUD();
-});
 
 /* ========== ДВИЖЕНИЕ ========== */
 const mvL=document.getElementById('mv-l'),mvR=document.getElementById('mv-r');
@@ -741,7 +726,7 @@ function explode(x,y,w,owner){
 }
 function addFloat(x,y,txt){floats.push({x:x,y:y,txt:txt,life:1.2});}
 
-/* ========== ОБНОВЛЕНИЕ ========== */
+/* ========== ОБНОВЛЕНИЕ (С УЧЕТОМ КЛАВИАТУРЫ) ========== */
 function update(dt){
   if(shake>0)shake-=dt*30;
   for(let i=particles.length-1;i>=0;i--){
@@ -756,10 +741,35 @@ function update(dt){
     zaps[i].life-=dt;
     if(zaps[i].life<=0)zaps.splice(i,1);
   }
-  if(state==='aim'&&turn==='p'&&moveDir!==0&&P.fuel>0){
-    const nx=P.x+moveDir*110*dt;
-    if(nx>40&&nx<E.x-80){P.x=nx;P.fuel=Math.max(0,P.fuel-22*dt);}
+  
+  // 1. ДВИЖЕНИЕ (Клавиатура A/D или экранные кнопки)
+  let kbMove = 0;
+  if (keys['KeyA']) kbMove = -1;
+  if (keys['KeyD']) kbMove = 1;
+  let finalMove = moveDir !== 0 ? moveDir : kbMove;
+
+  if(state==='aim' && turn==='p' && finalMove !== 0 && P.fuel > 0){
+    const nx = P.x + finalMove * 110 * dt;
+    if(nx > 40 && nx < E.x - 80){
+      P.x = nx;
+      P.fuel = Math.max(0, P.fuel - 22 * dt);
+    }
   }
+
+  // 2. ПРИЦЕЛИВАНИЕ (Стрелки)
+  if(state==='aim' && turn==='p'){
+    if (keys['ArrowLeft']) aimAngle = Math.max(5, aimAngle - 60 * dt);
+    if (keys['ArrowRight']) aimAngle = Math.min(175, aimAngle + 60 * dt);
+    if (keys['ArrowDown']) aimPower = Math.max(20, aimPower - 60 * dt);
+    if (keys['ArrowUp']) aimPower = Math.min(100, aimPower + 60 * dt);
+    
+    if (keys['ArrowLeft'] || keys['ArrowRight'] || keys['ArrowUp'] || keys['ArrowDown']) {
+      aimAngle = Math.round(aimAngle);
+      aimPower = Math.round(aimPower);
+      updateHUD();
+    }
+  }
+
   if(state==='fly'){
     for(let i=shots.length-1;i>=0;i--){
       const s=shots[i];
@@ -816,6 +826,7 @@ function update(dt){
     if(turnTimer>1.2){turnTimer=0;aiMoveTarget=null;aiThink();fireShot('e');}
   }
 }
+
 function endTurn(){
   if(P.hp<=0||E.hp<=0){gameOver();return;}
   if(turn==='p'){turn='e';state='enemy';}
@@ -1418,11 +1429,9 @@ genTerrain();
 document.getElementById('pm-sound').textContent=(sound.enabled?'🔊 ':' ')+t('pmSound');
 requestAnimationFrame(loop);
 
-// Инициализация SDK Пикабу (в самом конце)
 initPikabuSDK();
 
 window.addEventListener('resize',resize);
-// ИСПРАВЛЕННЫЙ БАГ: saveLocal() заменен на saveCloud() + добавлен gameplayStart при возврате
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden){
     saveCloud();
